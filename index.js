@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys')
 const qrcode = require('qrcode-terminal')
 const readline = require('readline')
 
@@ -22,10 +22,15 @@ rl.question('Elige método:\n1 = QR\n2 = Código\n👉 Opción: ', (opcion) => {
 async function startBot(opcion, numero = '') {
   const { state, saveCreds } = await useMultiFileAuthState('auth')
 
+  // 🔥 versión compatible automática
+  const { version } = await fetchLatestBaileysVersion()
+
   const sock = makeWASocket({
     auth: state,
+    version,
     printQRInTerminal: false,
-    browser: ['Ubuntu', 'Chrome', '22.04.4']
+    browser: ['Android', 'Chrome', '120.0.0'],
+    syncFullHistory: false
   })
 
   let codigoGenerado = false
@@ -33,40 +38,44 @@ async function startBot(opcion, numero = '') {
   sock.ev.on('connection.update', async (update) => {
     const { qr, connection, lastDisconnect } = update
 
-    // ✅ QR SIEMPRE FUNCIONA
+    // ✅ QR
     if (qr && opcion === '1') {
-      console.log('📱 Escanea el QR:')
+      console.log('\n📱 Escanea este QR:\n')
       qrcode.generate(qr, { small: true })
     }
 
-    // ✅ GENERAR CÓDIGO SOLO UNA VEZ Y CUANDO YA HAY SOCKET
+    // ✅ Código (espera conexión estable)
     if (opcion === '2' && numero && !codigoGenerado) {
       try {
         codigoGenerado = true
         setTimeout(async () => {
           const code = await sock.requestPairingCode(numero)
-          console.log('🔐 Código de vinculación:', code)
-        }, 3000) // ⏳ esperar conexión estable
+          console.log('\n🔐 Código de vinculación:', code, '\n')
+        }, 4000)
       } catch (err) {
         console.log('❌ Error generando código:', err)
       }
     }
 
+    // ✅ conectado
     if (connection === 'open') {
       console.log('✅ BOT CONECTADO')
     }
 
+    // 🔄 reconexión
     if (connection === 'close') {
       const reason = lastDisconnect?.error?.output?.statusCode
       console.log('❌ Desconectado, reconectando...', reason)
 
       if (reason !== DisconnectReason.loggedOut) {
         startBot(opcion, numero)
+      } else {
+        console.log('🚫 Sesión cerrada, elimina auth y vuelve a iniciar')
       }
     }
   })
 
-  // 💬 Mensajes básicos
+  // 💬 comandos básicos
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0]
     if (!msg.message) return
@@ -78,6 +87,8 @@ async function startBot(opcion, numero = '') {
     const from = msg.key.remoteJid
 
     if (!texto) return
+
+    console.log('📩 Mensaje:', texto)
 
     if (texto === '.ping') {
       await sock.sendMessage(from, { text: '🏓 Pong!' })
