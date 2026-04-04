@@ -8,14 +8,14 @@ const rl = readline.createInterface({
   output: process.stdout
 })
 
-// 🔘 menú principal
+// 🔘 menú
 rl.question('Elige método:\n1 = QR\n2 = Código\n👉 Opción: ', (opcion) => {
   if (opcion.trim() === '2') {
     rl.question('📱 Ingresa tu número (sin +): ', (numero) => {
       startBot(opcion.trim(), numero.trim())
     })
   } else {
-    startBot(opcion.trim())
+    startBot('1')
   }
 })
 
@@ -25,23 +25,28 @@ async function startBot(opcion, numero = '') {
   const sock = makeWASocket({
     auth: state,
     printQRInTerminal: false,
-    browser: ['Android', 'Chrome', '120.0.0']
+    browser: ['Ubuntu', 'Chrome', '22.04.4']
   })
+
+  let codigoGenerado = false
 
   sock.ev.on('connection.update', async (update) => {
     const { qr, connection, lastDisconnect } = update
 
-    // 🔹 QR
+    // ✅ QR SIEMPRE FUNCIONA
     if (qr && opcion === '1') {
       console.log('📱 Escanea el QR:')
       qrcode.generate(qr, { small: true })
     }
 
-    // 🔹 Código
-    if (connection === 'connecting' && opcion === '2' && numero) {
+    // ✅ GENERAR CÓDIGO SOLO UNA VEZ Y CUANDO YA HAY SOCKET
+    if (opcion === '2' && numero && !codigoGenerado) {
       try {
-        const code = await sock.requestPairingCode(numero)
-        console.log('🔐 Código de vinculación:', code)
+        codigoGenerado = true
+        setTimeout(async () => {
+          const code = await sock.requestPairingCode(numero)
+          console.log('🔐 Código de vinculación:', code)
+        }, 3000) // ⏳ esperar conexión estable
       } catch (err) {
         console.log('❌ Error generando código:', err)
       }
@@ -58,6 +63,33 @@ async function startBot(opcion, numero = '') {
       if (reason !== DisconnectReason.loggedOut) {
         startBot(opcion, numero)
       }
+    }
+  })
+
+  // 💬 Mensajes básicos
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0]
+    if (!msg.message) return
+
+    const texto =
+      msg.message.conversation ||
+      msg.message.extendedTextMessage?.text
+
+    const from = msg.key.remoteJid
+
+    if (!texto) return
+
+    if (texto === '.ping') {
+      await sock.sendMessage(from, { text: '🏓 Pong!' })
+    }
+
+    if (texto === '.menu') {
+      await sock.sendMessage(from, {
+        text: `🤖 *MENÚ*
+
+• .ping
+• .menu`
+      })
     }
   })
 
