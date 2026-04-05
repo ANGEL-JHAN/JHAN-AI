@@ -2,12 +2,12 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
-  DisconnectReason
+  DisconnectReason,
+  delay
 } = require("@whiskeysockets/baileys")
 
 const pino = require("pino")
 const readline = require("readline")
-const qrcode = require("qrcode-terminal")
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -25,13 +25,8 @@ async function startBot() {
 ╚══════════════════════════════╝
 `)
 
-  const opcion = await question("1 = QR | 2 = Código\n👉 Opción: ")
-
-  let numero = ""
-  if (opcion === "2") {
-    numero = await question("📱 Número: ")
-    numero = numero.replace(/[^0-9]/g, "")
-  }
+  const numeroInput = await question("📱 Número (sin +): ")
+  let numero = numeroInput.replace(/[^0-9]/g, "")
 
   const { state, saveCreds } = await useMultiFileAuthState("./session")
   const { version } = await fetchLatestBaileysVersion()
@@ -39,44 +34,52 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: "silent" }) // 🔥 sin logs
+    printQRInTerminal: false,
+    browser: ["Ubuntu", "Chrome", "120.0.0"], // 🔥 clave anti bloqueo
+    logger: pino({ level: "silent" })
   })
 
   sock.ev.on("creds.update", saveCreds)
 
+  let intentos = 0
   let codigoGenerado = false
 
   sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update
+    const { connection, lastDisconnect } = update
 
-    // QR
-    if (qr && opcion === "1") {
-      console.log("\n📲 ESCANEA EL QR:\n")
-      qrcode.generate(qr, { small: true })
-    }
-
-    // 🔥 código en momento correcto
-    if (connection === "connecting" && opcion === "2" && numero && !codigoGenerado) {
+    if (connection === "connecting" && !codigoGenerado) {
       codigoGenerado = true
+
       try {
+        await delay(3000) // 🔥 espera antes de pedir código
+
         const code = await sock.requestPairingCode(numero)
         console.log(`\n🔐 CÓDIGO: ${code}\n`)
-      } catch {
-        console.log("❌ Error al generar código")
+
+      } catch (e) {
+        console.log("❌ Error generando código")
+
+        intentos++
+        codigoGenerado = false
+
+        if (intentos < 3) {
+          console.log("🔄 Reintentando...\n")
+          await delay(5000)
+        } else {
+          console.log("🚫 Demasiados intentos, espera 10 min\n")
+        }
       }
     }
 
-    // conectado
     if (connection === "open") {
       console.log("🚀 BOT ONLINE\n")
     }
 
-    // desconexión
     if (connection === "close") {
       const reason = lastDisconnect?.error?.output?.statusCode
 
       if (reason !== DisconnectReason.loggedOut) {
-        console.log("🔄 Reconectando...\n")
+        console.log("🔄 Reconectando limpio...\n")
         startBot()
       } else {
         console.log("🚫 Sesión cerrada, borra carpeta session\n")
@@ -85,5 +88,4 @@ async function startBot() {
   })
 }
 
-// iniciar
 startBot()
