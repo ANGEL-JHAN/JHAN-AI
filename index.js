@@ -8,8 +8,7 @@ const {
 
 const pino = require("pino")
 
-// 🔥 TU NÚMERO AQUÍ (SIN +)
-const NUMERO = "51967006003"
+const NUMERO = "51967006003" // SIN +
 
 async function startSock() {
   console.clear()
@@ -32,36 +31,34 @@ async function startSock() {
 
   sock.ev.on("creds.update", saveCreds)
 
-  let codigoEnviado = false
+  let enviado = false
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update
 
-    if (connection === "connecting" && !codigoEnviado) {
-      codigoEnviado = true
+    if (connection === "connecting" && !enviado) {
+      enviado = true
 
       try {
-        console.log("⏳ Generando código...\n")
+        console.log("⏳ Esperando conexión real...\n")
 
-        // 🔥 CLAVE: esperar handshake real
-        await delay(8000)
+        await delay(10000) // 🔥 MÁS TIEMPO = MENOS BLOQUEO
 
         const code = await sock.requestPairingCode(NUMERO)
 
         console.log(`🔐 CÓDIGO: ${code}\n`)
         console.log("📲 Ve a WhatsApp > Dispositivos vinculados > Vincular con código\n")
 
-        // 🔥 mantener vivo (clave anti cierre)
-        await delay(25000)
+        await delay(30000) // 🔥 mantener vivo
 
       } catch (e) {
         console.log("❌ Error generando código\n")
-        codigoEnviado = false
+        enviado = false
       }
     }
 
     if (connection === "open") {
-      console.log("🚀 BOT CONECTADO (VINCULADO)\n")
+      console.log("🚀 BOT CONECTADO\n")
     }
 
     if (connection === "close") {
@@ -72,7 +69,7 @@ async function startSock() {
         await delay(5000)
         startSock()
       } else {
-        console.log("🚫 Sesión cerrada, borra carpeta session\n")
+        console.log("🚫 Sesión cerrada, elimina carpeta session\n")
       }
     }
   })
