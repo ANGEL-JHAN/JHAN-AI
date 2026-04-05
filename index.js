@@ -4,76 +4,72 @@ const {
   fetchLatestBaileysVersion,
   DisconnectReason,
   delay
-} = require("@whiskeysockets/baileys")
+} = require("@whiskeysockets/baileys");
 
-const pino = require("pino")
+const pino = require("pino");
+const fs = require("fs");
+const path = require("path");
 
-const NUMERO = "51967006003"
+const NUMERO = "51967006003"; // <- tu número sin +
+
+let handler = require("./handler");
+
+// 🔥 Auto recarga del handler
+fs.watchFile(path.resolve(__dirname, "handler.js"), () => {
+  console.log("♻️ Recargando handler...");
+  delete require.cache[require.resolve("./handler")];
+  handler = require("./handler");
+});
 
 async function startSock() {
-  console.clear()
-
+  console.clear();
   console.log(`
 ╔══════════════════════════════╗
-   AI - PRO MAX ⚡ (PAIR CODE)
+   AI - PRO MAX ⚡
 ╚══════════════════════════════╝
-`)
+`);
 
-  const { state, saveCreds } = await useMultiFileAuthState("./session")
-  const { version } = await fetchLatestBaileysVersion()
+  const { state, saveCreds } = await useMultiFileAuthState("./session");
+  const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
     version,
     auth: state,
-    browser: ["Windows", "Chrome", "122.0.0"],
-    logger: pino({ level: "silent" })
-  })
+    browser: ["Termux", "Chrome", "120.0.0"],
+    logger: pino({ level: "silent" }),
+    printQRInTerminal: false // ya no imprime QR automáticamente
+  });
 
-  sock.ev.on("creds.update", saveCreds)
+  sock.ev.on("creds.update", saveCreds);
 
-  let enviado = false
-
+  // Conexión
   sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect } = update
+    const { connection, lastDisconnect, qr, pairCode } = update;
 
-    // 🔥 SOLO CUANDO YA HAY SOCKET LISTO
-    if (!sock.authState.creds.registered && !enviado) {
-      enviado = true
+    if (connection === "connecting") console.log("🔄 Conectando...");
+    if (connection === "open") console.log(`🚀 BOT ONLINE\n`);
 
-      try {
-        console.log("⏳ Generando código correctamente...\n")
-
-        await delay(6000) // tiempo justo
-
-        const code = await sock.requestPairingCode(NUMERO)
-
-        console.log(`🔐 CÓDIGO: ${code}\n`)
-        console.log("📲 Vincula en WhatsApp\n")
-
-        await delay(20000)
-
-      } catch (e) {
-        console.log("❌ Error generando código\n")
-        enviado = false
-      }
-    }
-
-    if (connection === "open") {
-      console.log("🚀 BOT CONECTADO\n")
-    }
+    if (pairCode) console.log(`🔐 CÓDIGO: ${pairCode} (vincula en WhatsApp)`);
 
     if (connection === "close") {
-      const reason = lastDisconnect?.error?.output?.statusCode
-
+      const reason = lastDisconnect?.error?.output?.statusCode;
       if (reason !== DisconnectReason.loggedOut) {
-        console.log("🔄 Reconectando...\n")
-        await delay(5000)
-        startSock()
+        console.log("🔄 Reconectando...");
+        await delay(4000);
+        startSock();
       } else {
-        console.log("🚫 Sesión cerrada, elimina carpeta session\n")
+        console.log("🚫 Sesión cerrada, borra carpeta session");
       }
     }
-  })
+  });
+
+  // Mensajes
+  sock.ev.on("messages.upsert", async (m) => {
+    handler(sock, m);
+  });
+
+  // Mensaje inicial con número
+  console.log(`📱 Número: ${NUMERO}`);
 }
 
-startSock()
+startSock();
