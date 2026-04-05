@@ -35,14 +35,14 @@ async function startBot() {
     version,
     auth: state,
     printQRInTerminal: false,
-    browser: ["Ubuntu", "Chrome", "120.0.0"], // 🔥 clave anti bloqueo
+    browser: ["Windows", "Chrome", "122.0.0"], // 🔥 mejor compatibilidad
     logger: pino({ level: "silent" })
   })
 
   sock.ev.on("creds.update", saveCreds)
 
-  let intentos = 0
   let codigoGenerado = false
+  let intentos = 0
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update
@@ -51,22 +51,25 @@ async function startBot() {
       codigoGenerado = true
 
       try {
-        await delay(3000) // 🔥 espera antes de pedir código
+        await delay(5000) // 🔥 espera real (evita bloqueo)
 
         const code = await sock.requestPairingCode(numero)
         console.log(`\n🔐 CÓDIGO: ${code}\n`)
 
-      } catch (e) {
-        console.log("❌ Error generando código")
+        // 🔥 mantener viva la conexión
+        await delay(20000)
 
+      } catch (e) {
         intentos++
         codigoGenerado = false
 
+        console.log("❌ Error generando código")
+
         if (intentos < 3) {
           console.log("🔄 Reintentando...\n")
-          await delay(5000)
+          await delay(8000)
         } else {
-          console.log("🚫 Demasiados intentos, espera 10 min\n")
+          console.log("🚫 Espera 10-30 minutos antes de intentar\n")
         }
       }
     }
@@ -80,6 +83,7 @@ async function startBot() {
 
       if (reason !== DisconnectReason.loggedOut) {
         console.log("🔄 Reconectando limpio...\n")
+        await delay(5000)
         startBot()
       } else {
         console.log("🚫 Sesión cerrada, borra carpeta session\n")
