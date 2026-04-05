@@ -8,7 +8,7 @@ const {
 
 const pino = require("pino")
 
-const NUMERO = "51967006003" // SIN +
+const NUMERO = "51967006003"
 
 async function startSock() {
   console.clear()
@@ -36,20 +36,21 @@ async function startSock() {
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update
 
-    if (connection === "connecting" && !enviado) {
+    // 🔥 SOLO CUANDO YA HAY SOCKET LISTO
+    if (!sock.authState.creds.registered && !enviado) {
       enviado = true
 
       try {
-        console.log("⏳ Esperando conexión real...\n")
+        console.log("⏳ Generando código correctamente...\n")
 
-        await delay(10000) // 🔥 MÁS TIEMPO = MENOS BLOQUEO
+        await delay(6000) // tiempo justo
 
         const code = await sock.requestPairingCode(NUMERO)
 
         console.log(`🔐 CÓDIGO: ${code}\n`)
-        console.log("📲 Ve a WhatsApp > Dispositivos vinculados > Vincular con código\n")
+        console.log("📲 Vincula en WhatsApp\n")
 
-        await delay(30000) // 🔥 mantener vivo
+        await delay(20000)
 
       } catch (e) {
         console.log("❌ Error generando código\n")
