@@ -7,8 +7,8 @@ const {
 
 const pino = require("pino")
 const readline = require("readline")
+const qrcode = require("qrcode-terminal")
 
-// consola limpia
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
@@ -28,7 +28,6 @@ async function startBot() {
   const opcion = await question("1 = QR | 2 = Código\n👉 Opción: ")
 
   let numero = ""
-
   if (opcion === "2") {
     numero = await question("📱 Número: ")
     numero = numero.replace(/[^0-9]/g, "")
@@ -40,35 +39,39 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: "silent" }) // 🔥 SIN LOGS
+    logger: pino({ level: "silent" }) // 🔥 sin logs
   })
 
   sock.ev.on("creds.update", saveCreds)
 
-  // conexión
+  let codigoGenerado = false
+
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update
 
     // QR
     if (qr && opcion === "1") {
-      const qrcode = require("qrcode-terminal")
       console.log("\n📲 ESCANEA EL QR:\n")
       qrcode.generate(qr, { small: true })
     }
 
-    // código
-    if (opcion === "2" && numero) {
+    // 🔥 código en momento correcto
+    if (connection === "connecting" && opcion === "2" && numero && !codigoGenerado) {
+      codigoGenerado = true
       try {
         const code = await sock.requestPairingCode(numero)
         console.log(`\n🔐 CÓDIGO: ${code}\n`)
-        numero = "" // evita repetir
-      } catch {}
+      } catch {
+        console.log("❌ Error al generar código")
+      }
     }
 
+    // conectado
     if (connection === "open") {
       console.log("🚀 BOT ONLINE\n")
     }
 
+    // desconexión
     if (connection === "close") {
       const reason = lastDisconnect?.error?.output?.statusCode
 
@@ -76,7 +79,7 @@ async function startBot() {
         console.log("🔄 Reconectando...\n")
         startBot()
       } else {
-        console.log("🚫 Sesión cerrada\n")
+        console.log("🚫 Sesión cerrada, borra carpeta session\n")
       }
     }
   })
