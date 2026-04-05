@@ -1,35 +1,23 @@
-module.exports = async (sock, msg, text) => {
-  const from = msg.key.remoteJid
-
-  // detectar mensaje
+module.exports = async (sock, msg) => {
+  const from = msg.key.remoteJid;
   const body =
     msg.message?.conversation ||
     msg.message?.extendedTextMessage?.text ||
-    ""
+    "";
 
-  if (!body.startsWith("/menu")) return
-
-  const menu = `
+  if (body.toLowerCase().trim() === "/menu") {
+    const menu = `
 ╔════════════════════╗
-   🤖 *AI BOT PRO MAX*
+   🤖 AI BOT PRO MAX
 ╚════════════════════╝
 
-👋 Hola usuario
+📜 COMANDOS DISPONIBLES
 
-📜 *COMANDOS DISPONIBLES*
+🔹 /menu      - Mostrar este menú
+🔹 /ping      - Verificar bot
+🔹 /hola      - Saludar al bot
+`;
 
-🔹 /menu → Ver menú
-🔹 /ping → Estado del bot
-🔹 /hola → Saludo
-
-⚡ *SISTEMA ACTIVO*
-✅ Bot encendido
-✅ Conectado
-
-╔════════════════════╗
-   ANGEL OFC DEV
-╚════════════════════╝
-`
-
-  await sock.sendMessage(from, { text: menu }, { quoted: msg })
-}
+    await sock.sendMessage(from, { text: menu }, { quoted: msg });
+  }
+};
