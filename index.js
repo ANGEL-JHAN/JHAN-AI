@@ -8,12 +8,15 @@ const {
 
 const pino = require("pino")
 
+// 🔥 TU NÚMERO AQUÍ (SIN +)
+const NUMERO = "51967006003"
+
 async function startSock() {
   console.clear()
 
   console.log(`
 ╔══════════════════════════════╗
-   AI - PRO MAX ⚡
+   AI - PRO MAX ⚡ (PAIR CODE)
 ╚══════════════════════════════╝
 `)
 
@@ -23,52 +26,54 @@ async function startSock() {
   const sock = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: true, // 🔥 QR automático
     browser: ["Windows", "Chrome", "122.0.0"],
     logger: pino({ level: "silent" })
   })
 
   sock.ev.on("creds.update", saveCreds)
 
+  let codigoEnviado = false
+
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update
 
-    if (connection === "connecting") {
-      console.log("🔄 Conectando...\n")
+    if (connection === "connecting" && !codigoEnviado) {
+      codigoEnviado = true
+
+      try {
+        console.log("⏳ Generando código...\n")
+
+        // 🔥 CLAVE: esperar handshake real
+        await delay(8000)
+
+        const code = await sock.requestPairingCode(NUMERO)
+
+        console.log(`🔐 CÓDIGO: ${code}\n`)
+        console.log("📲 Ve a WhatsApp > Dispositivos vinculados > Vincular con código\n")
+
+        // 🔥 mantener vivo (clave anti cierre)
+        await delay(25000)
+
+      } catch (e) {
+        console.log("❌ Error generando código\n")
+        codigoEnviado = false
+      }
     }
 
     if (connection === "open") {
-      console.log("🚀 BOT ONLINE (YA VINCULADO)\n")
+      console.log("🚀 BOT CONECTADO (VINCULADO)\n")
     }
 
     if (connection === "close") {
       const reason = lastDisconnect?.error?.output?.statusCode
 
       if (reason !== DisconnectReason.loggedOut) {
-        console.log("🔄 Reconectando automático...\n")
-        await delay(4000)
-        startSock() // 🔥 solo socket, limpio
+        console.log("🔄 Reconectando...\n")
+        await delay(5000)
+        startSock()
       } else {
-        console.log("🚫 Sesión cerrada, elimina carpeta session\n")
+        console.log("🚫 Sesión cerrada, borra carpeta session\n")
       }
-    }
-  })
-
-  // 👇 EJEMPLO DE BOT (RESPONDE)
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    const msg = messages[0]
-    if (!msg.message) return
-
-    const texto =
-      msg.message.conversation ||
-      msg.message.extendedTextMessage?.text
-
-    if (!texto) return
-
-    if (texto.toLowerCase() === "hola") {
-      await sock.sendMessage(msg.key.remoteJid, {
-        text: "👋 Hola, soy tu bot PRO MAX ⚡"
-      })
     }
   })
 }
