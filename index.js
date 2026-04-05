@@ -7,16 +7,8 @@ const {
 } = require("@whiskeysockets/baileys")
 
 const pino = require("pino")
-const readline = require("readline")
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-})
-
-const question = (text) => new Promise(resolve => rl.question(text, resolve))
-
-async function startBot() {
+async function startSock() {
   console.clear()
 
   console.log(`
@@ -25,71 +17,60 @@ async function startBot() {
 ╚══════════════════════════════╝
 `)
 
-  const numeroInput = await question("📱 Número (sin +): ")
-  let numero = numeroInput.replace(/[^0-9]/g, "")
-
   const { state, saveCreds } = await useMultiFileAuthState("./session")
   const { version } = await fetchLatestBaileysVersion()
 
   const sock = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: false,
-    browser: ["Windows", "Chrome", "122.0.0"], // 🔥 mejor compatibilidad
+    printQRInTerminal: true, // 🔥 QR automático
+    browser: ["Windows", "Chrome", "122.0.0"],
     logger: pino({ level: "silent" })
   })
 
   sock.ev.on("creds.update", saveCreds)
 
-  let codigoGenerado = false
-  let intentos = 0
-
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update
 
-    if (connection === "connecting" && !codigoGenerado) {
-      codigoGenerado = true
-
-      try {
-        await delay(5000) // 🔥 espera real (evita bloqueo)
-
-        const code = await sock.requestPairingCode(numero)
-        console.log(`\n🔐 CÓDIGO: ${code}\n`)
-
-        // 🔥 mantener viva la conexión
-        await delay(20000)
-
-      } catch (e) {
-        intentos++
-        codigoGenerado = false
-
-        console.log("❌ Error generando código")
-
-        if (intentos < 3) {
-          console.log("🔄 Reintentando...\n")
-          await delay(8000)
-        } else {
-          console.log("🚫 Espera 10-30 minutos antes de intentar\n")
-        }
-      }
+    if (connection === "connecting") {
+      console.log("🔄 Conectando...\n")
     }
 
     if (connection === "open") {
-      console.log("🚀 BOT ONLINE\n")
+      console.log("🚀 BOT ONLINE (YA VINCULADO)\n")
     }
 
     if (connection === "close") {
       const reason = lastDisconnect?.error?.output?.statusCode
 
       if (reason !== DisconnectReason.loggedOut) {
-        console.log("🔄 Reconectando limpio...\n")
-        await delay(5000)
-        startBot()
+        console.log("🔄 Reconectando automático...\n")
+        await delay(4000)
+        startSock() // 🔥 solo socket, limpio
       } else {
-        console.log("🚫 Sesión cerrada, borra carpeta session\n")
+        console.log("🚫 Sesión cerrada, elimina carpeta session\n")
       }
+    }
+  })
+
+  // 👇 EJEMPLO DE BOT (RESPONDE)
+  sock.ev.on("messages.upsert", async ({ messages }) => {
+    const msg = messages[0]
+    if (!msg.message) return
+
+    const texto =
+      msg.message.conversation ||
+      msg.message.extendedTextMessage?.text
+
+    if (!texto) return
+
+    if (texto.toLowerCase() === "hola") {
+      await sock.sendMessage(msg.key.remoteJid, {
+        text: "👋 Hola, soy tu bot PRO MAX ⚡"
+      })
     }
   })
 }
 
-startBot()
+startSock()
